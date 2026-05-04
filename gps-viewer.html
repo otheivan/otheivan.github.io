@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GPS Data Viewer</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      max-width: 700px;
+      margin: 0 auto;
+      background: #fff;
+      color: #111;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p.subtitle { color: #555; margin: 0 0 16px; font-size: 0.9rem; }
+
+    #status {
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      background: #f0f0f0;
+      border-left: 4px solid #aaa;
+    }
+    #status.ok   { background: #e8f5e9; border-color: #4caf50; }
+    #status.err  { background: #fdecea; border-color: #e53935; }
+    #status.wait { background: #fff8e1; border-color: #ffc107; }
+
+    button {
+      padding: 8px 18px;
+      font-size: 0.95rem;
+      font-family: monospace;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #555;
+      border-radius: 3px;
+      background: #111;
+      color: #fff;
+    }
+    button:hover { background: #333; }
+    button#stopBtn { background: #fff; color: #111; }
+    button#stopBtn:hover { background: #eee; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 7px 10px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    th { color: #555; font-weight: normal; width: 45%; }
+    td { font-weight: bold; }
+    td.na { color: #aaa; font-weight: normal; font-style: italic; }
+
+    .section-header {
+      background: #f5f5f5;
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #777;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    #lastUpdated {
+      margin-top: 12px;
+      font-size: 0.8rem;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+<h1>GPS Data Viewer</h1>
+<p class="subtitle">Raw GPS output from this device</p>
+
+<div id="status" class="wait">Waiting — press a button to start.</div>
+
+<div>
+  <button id="onceBtn" onclick="getOnce()">Get Once</button>
+  <button id="watchBtn" onclick="startWatch()">Watch (live)</button>
+  <button id="stopBtn" onclick="stopWatch()" style="display:none">Stop</button>
+</div>
+
+<table id="gpsTable">
+  <tbody>
+    <tr><td colspan="2" class="section-header">Position</td></tr>
+    <tr><th>Latitude</th><td id="lat" class="na">—</td></tr>
+    <tr><th>Longitude</th><td id="lon" class="na">—</td></tr>
+    <tr><th>Altitude (m)</th><td id="alt" class="na">—</td></tr>
+    <tr><th>Altitude (ft)</th><td id="altFt" class="na">—</td></tr>
+
+    <tr><td colspan="2" class="section-header">Accuracy</td></tr>
+    <tr><th>Horizontal accuracy (m)</th><td id="accH" class="na">—</td></tr>
+    <tr><th>Vertical accuracy (m)</th><td id="accV" class="na">—</td></tr>
+
+    <tr><td colspan="2" class="section-header">Movement</td></tr>
+    <tr><th>Speed (m/s)</th><td id="speed" class="na">—</td></tr>
+    <tr><th>Speed (km/h)</th><td id="speedKmh" class="na">—</td></tr>
+    <tr><th>Speed (knots)</th><td id="speedKn" class="na">—</td></tr>
+    <tr><th>Heading (°)</th><td id="heading" class="na">—</td></tr>
+    <tr><th>Heading (direction)</th><td id="headingDir" class="na">—</td></tr>
+
+    <tr><td colspan="2" class="section-header">Timestamp</td></tr>
+    <tr><th>GPS timestamp (UTC)</th><td id="ts" class="na">—</td></tr>
+    <tr><th>GPS timestamp (local)</th><td id="tsLocal" class="na">—</td></tr>
+    <tr><th>Unix timestamp (ms)</th><td id="tsRaw" class="na">—</td></tr>
+  </tbody>
+</table>
+
+<div id="lastUpdated"></div>
+
+<script>
+  let watchId = null;
+
+  const fields = {
+    lat:      pos => pos.coords.latitude.toFixed(7),
+    lon:      pos => pos.coords.longitude.toFixed(7),
+    alt:      pos => pos.coords.altitude != null ? pos.coords.altitude.toFixed(1) : null,
+    altFt:    pos => pos.coords.altitude != null ? (pos.coords.altitude * 3.28084).toFixed(1) : null,
+    accH:     pos => pos.coords.accuracy != null ? pos.coords.accuracy.toFixed(1) : null,
+    accV:     pos => pos.coords.altitudeAccuracy != null ? pos.coords.altitudeAccuracy.toFixed(1) : null,
+    speed:    pos => pos.coords.speed != null ? pos.coords.speed.toFixed(2) : null,
+    speedKmh: pos => pos.coords.speed != null ? (pos.coords.speed * 3.6).toFixed(2) : null,
+    speedKn:  pos => pos.coords.speed != null ? (pos.coords.speed * 1.94384).toFixed(2) : null,
+    heading:  pos => pos.coords.heading != null ? pos.coords.heading.toFixed(1) + '°' : null,
+    headingDir: pos => {
+      if (pos.coords.heading == null) return null;
+      const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+      return dirs[Math.round(pos.coords.heading / 22.5) % 16];
+    },
+    ts:       pos => new Date(pos.timestamp).toUTCString(),
+    tsLocal:  pos => new Date(pos.timestamp).toLocaleString(),
+    tsRaw:    pos => pos.timestamp,
+  };
+
+  function setStatus(msg, cls) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = cls;
+  }
+
+  function update(pos) {
+    for (const [id, fn] of Object.entries(fields)) {
+      const el = document.getElementById(id);
+      const val = fn(pos);
+      if (val != null) {
+        el.textContent = val;
+        el.className = '';
+      } else {
+        el.textContent = 'Not available';
+        el.className = 'na';
+      }
+    }
+    document.getElementById('lastUpdated').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString();
+    setStatus('Data received.', 'ok');
+  }
+
+  function onError(err) {
+    const msgs = {
+      1: 'Permission denied — please allow location access.',
+      2: 'Position unavailable — could not determine location.',
+      3: 'Timeout — GPS took too long to respond.',
+    };
+    setStatus('Error: ' + (msgs[err.code] || err.message), 'err');
+  }
+
+  const GEO_OPTS = {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 15000,
+  };
+
+  function getOnce() {
+    stopWatch();
+    document.getElementById('stopBtn').style.display = 'none';
+    setStatus('Requesting position…', 'wait');
+    navigator.geolocation.getCurrentPosition(update, onError, GEO_OPTS);
+  }
+
+  function startWatch() {
+    stopWatch();
+    document.getElementById('stopBtn').style.display = '';
+    setStatus('Watching — waiting for first fix…', 'wait');
+    watchId = navigator.geolocation.watchPosition(update, onError, GEO_OPTS);
+  }
+
+  function stopWatch() {
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      setStatus('Watch stopped.', '');
+      document.getElementById('stopBtn').style.display = 'none';
+    }
+  }
+
+  if (!navigator.geolocation) {
+    setStatus('Geolocation is not supported by this browser.', 'err');
+    document.getElementById('onceBtn').disabled = true;
+    document.getElementById('watchBtn').disabled = true;
+  }
+</script>
+
+</body>
+</html>
