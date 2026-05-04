@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>GPS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg:      #0e1117;
+      --surface: #181d27;
+      --border:  #2a3142;
+      --accent:  #e8c84a;
+      --accent2: #5bc8af;
+      --text:    #eef0f4;
+      --muted:   #6b7590;
+      --na:      #3a3f52;
+      --mono:    'Syne Mono', monospace;
+      --sans:    'Barlow', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 0 env(safe-area-inset-bottom);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    #statusDot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--na);
+      transition: background 0.4s;
+    }
+    #statusDot.ok   { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+    #statusDot.err  { background: #e05a5a;        box-shadow: 0 0 8px #e05a5a; }
+    #statusDot.wait { background: var(--accent);  box-shadow: 0 0 8px var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    #compassBanner {
+      margin: 14px 16px 0;
+      background: #1a1e2e;
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: none; /* shown only when needed */
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    #compassBanner p { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+    #compassBanner strong { color: var(--text); }
+    #compassBanner button {
+      flex-shrink: 0;
+      background: var(--accent);
+      color: #111;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 10px 14px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+    }
+    #compassBanner button:active { opacity: 0.75; }
+
+    .primary-card {
+      margin: 16px 16px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 20px 20px;
+    }
+    .top-row { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 24px; }
+    .top-row .stat { text-align: center; }
+    .top-row .stat:first-child { border-right: 1px solid var(--border); padding-right: 16px; }
+    .top-row .stat:last-child  { padding-left: 16px; }
+    .stat-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .stat-value { font-family: var(--mono); font-size: 2.6rem; line-height: 1; color: var(--text); }
+    .stat-value.direction { font-size: 2.8rem; color: var(--accent); }
+    .stat-value.na { color: var(--na); }
+    .stat-unit { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+    .coord-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .coord-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .coord-box .stat-label { margin-bottom: 4px; }
+    .coord-val { font-family: var(--mono); font-size: 1.05rem; color: var(--accent2); }
+    .coord-val.na { color: var(--na); }
+
+    .details-wrap { margin: 12px 16px 0; }
+    .details-toggle {
+      width: 100%;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 16px 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .details-toggle:active { border-color: var(--accent); color: var(--text); }
+    .chevron { display: inline-block; transition: transform 0.3s ease; }
+    .details-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .details-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease; }
+    .details-body.open { max-height: 700px; }
+    .details-inner { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; overflow: hidden; }
+    .detail-row { display: flex; justify-content: space-between; align-items: baseline; padding: 11px 16px; border-bottom: 1px solid var(--border); gap: 12px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-key { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); flex-shrink: 0; }
+    .detail-val { font-family: var(--mono); font-size: 0.88rem; color: var(--text); text-align: right; }
+    .detail-val.na { color: var(--na); font-style: italic; font-family: var(--sans); font-size: 0.8rem; }
+    .detail-section { background: var(--bg); padding: 5px 16px; font-size: 0.65rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--na); }
+
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 16px 0; }
+    .btn { height: 60px; border-radius: 14px; border: none; font-family: var(--sans); font-size: 0.95rem; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; transition: opacity 0.15s, transform 0.1s; -webkit-tap-highlight-color: transparent; }
+    .btn:active { opacity: 0.7; transform: scale(0.97); }
+    .btn-once  { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-watch { background: var(--accent); color: #111; }
+    .btn-stop  { background: #2a1a1a; color: #e05a5a; border: 1px solid #3d2020; display: none; }
+    .btn-row.watching .btn-once  { display: none; }
+    .btn-row.watching .btn-watch { display: none; }
+    .btn-row.watching .btn-stop  { display: block; grid-column: 1 / -1; }
+
+    #statusText { text-align: center; font-size: 0.72rem; color: var(--muted); padding: 14px 16px 24px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>GPS Viewer</h1>
+  <div id="statusDot"></div>
+</header>
+
+<div id="compassBanner">
+  <p><strong>Compass access needed</strong><br>Tap to enable the magnetometer for indoor direction.</p>
+  <button onclick="requestIOSCompass()">Enable</button>
+</div>
+
+<div class="primary-card">
+  <div class="top-row">
+    <div class="stat">
+      <div class="stat-label">Altitude</div>
+      <div class="stat-value na" id="alt">—</div>
+      <div class="stat-unit">metres</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Direction</div>
+      <div class="stat-value direction na" id="headingDir">—</div>
+      <div class="stat-unit" id="headingDeg">—°</div>
+    </div>
+  </div>
+  <div class="coord-row">
+    <div class="coord-box">
+      <div class="stat-label">Latitude</div>
+      <div class="coord-val na" id="lat">—</div>
+    </div>
+    <div class="coord-box">
+      <div class="stat-label">Longitude</div>
+      <div class="coord-val na" id="lon">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="details-wrap">
+  <button class="details-toggle" id="detailsToggle" aria-expanded="false" onclick="toggleDetails()">
+    More details <span class="chevron">▾</span>
+  </button>
+  <div class="details-body" id="detailsBody">
+    <div class="details-inner">
+      <div class="detail-section">Accuracy</div>
+      <div class="detail-row"><span class="detail-key">Horiz. accuracy</span><span class="detail-val na" id="accH">—</span></div>
+      <div class="detail-row"><span class="detail-key">Vert. accuracy</span><span class="detail-val na" id="accV">—</span></div>
+      <div class="detail-section">Altitude</div>
+      <div class="detail-row"><span class="detail-key">Altitude (ft)</span><span class="detail-val na" id="altFt">—</span></div>
+      <div class="detail-section">Speed</div>
+      <div class="detail-row"><span class="detail-key">Speed m/s</span><span class="detail-val na" id="speed">—</span></div>
+      <div class="detail-row"><span class="detail-key">Speed km/h</span><span class="detail-val na" id="speedKmh">—</span></div>
+      <div class="detail-row"><span class="detail-key">Speed knots</span><span class="detail-val na" id="speedKn">—</span></div>
+      <div class="detail-section">Compass</div>
+      <div class="detail-row"><span class="detail-key">Source</span><span class="detail-val na" id="compassSource">—</span></div>
+      <div class="detail-section">Timestamp</div>
+      <div class="detail-row"><span class="detail-key">GPS time UTC</span><span class="detail-val na" id="ts">—</span></div>
+      <div class="detail-row"><span class="detail-key">Local time</span><span class="detail-val na" id="tsLocal">—</span></div>
+      <div class="detail-row"><span class="detail-key">Unix ms</span><span class="detail-val na" id="tsRaw">—</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="btn-row" id="btnRow">
+  <button class="btn btn-once" onclick="getOnce()">Get Once</button>
+  <button class="btn btn-watch" onclick="startWatch()">▶ Watch Live</button>
+  <button class="btn btn-stop" onclick="stopWatch()">■ Stop</button>
+</div>
+
+<div id="statusText">Press a button to start.</div>
+
+<script>
+  let watchId = null;
+  let compassSource = 'none'; // 'ios' | 'android' | 'gps' | 'none'
+
+  const compass16 = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+
+  function degToCompass(deg) {
+    return compass16[Math.round(deg / 22.5) % 16];
+  }
+
+  function setVal(id, value) {
+    const el = document.getElementById(id);
+    if (value != null) { el.textContent = value; el.classList.remove('na'); }
+    else               { el.textContent = '—';   el.classList.add('na'); }
+  }
+
+  function setStatus(msg, dotClass) {
+    document.getElementById('statusText').textContent = msg;
+    document.getElementById('statusDot').className = dotClass || '';
+  }
+
+  function applyHeading(deg, source) {
+    compassSource = source;
+    setVal('headingDir', degToCompass(deg));
+    document.getElementById('headingDir').classList.remove('na');
+    document.getElementById('headingDeg').textContent = deg.toFixed(1) + '°';
+    const labels = { ios: 'Magnetometer — iOS', android: 'Magnetometer — Android', gps: 'GPS track' };
+    setVal('compassSource', labels[source] || source);
+  }
+
+  /* ── iOS: webkitCompassHeading ── */
+  function onIOSOrientation(e) {
+    if (e.webkitCompassHeading != null && !isNaN(e.webkitCompassHeading)) {
+      applyHeading(e.webkitCompassHeading, 'ios');
+    }
+  }
+
+  async function requestIOSCompass() {
+    const banner = document.getElementById('compassBanner');
+    try {
+      const result = await DeviceOrientationEvent.requestPermission();
+      if (result === 'granted') {
+        window.addEventListener('deviceorientation', onIOSOrientation, true);
+        banner.style.display = 'none';
+      } else {
+        banner.querySelector('p').innerHTML =
+          '<strong>Permission denied.</strong> Go to iOS Settings → Safari → Motion & Orientation Access.';
+        banner.querySelector('button').style.display = 'none';
+      }
+    } catch (err) {
+      banner.querySelector('p').textContent = 'Could not request permission: ' + err.message;
+    }
+  }
+
+  /* ── Android: deviceorientationabsolute ── */
+  function onAndroidOrientation(e) {
+    // alpha on an absolute event is degrees counter-clockwise from magnetic north,
+    // so we convert: heading = (360 - alpha) % 360
+    if (e.alpha != null && !isNaN(e.alpha)) {
+      const heading = (360 - e.alpha) % 360;
+      applyHeading(heading, 'android');
+    }
+  }
+
+  /* ── Detect platform and set up compass ── */
+  (function initCompass() {
+    const banner = document.getElementById('compassBanner');
+
+    if (typeof DeviceOrientationEvent === 'undefined') {
+      // No orientation support (desktop etc.) — do nothing
+      return;
+    }
+
+    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (isIOS) {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ — need user gesture, show banner
+        banner.style.display = 'flex';
+      } else {
+        // Older iOS — attach directly
+        window.addEventListener('deviceorientation', onIOSOrientation, true);
+      }
+    } else {
+      // Android (and others): try deviceorientationabsolute first
+      if ('ondeviceorientationabsolute' in window) {
+        window.addEventListener('deviceorientationabsolute', onAndroidOrientation, true);
+      } else {
+        // Fallback: plain deviceorientation — may not be true north, but better than nothing
+        window.addEventListener('deviceorientation', function(e) {
+          if (e.absolute && e.alpha != null) {
+            onAndroidOrientation(e);
+          }
+        }, true);
+      }
+    }
+  })();
+
+  /* ── GPS position ── */
+  function update(pos) {
+    const c = pos.coords;
+    setVal('lat', c.latitude.toFixed(6));
+    setVal('lon', c.longitude.toFixed(6));
+    setVal('alt', c.altitude != null ? c.altitude.toFixed(1) : null);
+
+    // GPS heading only as last resort (requires movement)
+    if (compassSource === 'none' && c.heading != null && !isNaN(c.heading)) {
+      applyHeading(c.heading, 'gps');
+    }
+
+    setVal('accH',     c.accuracy != null        ? c.accuracy.toFixed(1) + ' m'              : null);
+    setVal('accV',     c.altitudeAccuracy != null ? c.altitudeAccuracy.toFixed(1) + ' m'      : null);
+    setVal('altFt',    c.altitude != null         ? (c.altitude * 3.28084).toFixed(1) + ' ft' : null);
+    setVal('speed',    c.speed != null            ? c.speed.toFixed(2) + ' m/s'               : null);
+    setVal('speedKmh', c.speed != null            ? (c.speed * 3.6).toFixed(2) + ' km/h'      : null);
+    setVal('speedKn',  c.speed != null            ? (c.speed * 1.94384).toFixed(2) + ' kn'    : null);
+    setVal('ts',       new Date(pos.timestamp).toUTCString());
+    setVal('tsLocal',  new Date(pos.timestamp).toLocaleTimeString());
+    setVal('tsRaw',    pos.timestamp);
+
+    setStatus('Updated ' + new Date().toLocaleTimeString(), 'ok');
+  }
+
+  function onError(err) {
+    const msgs = { 1:'Permission denied.', 2:'Position unavailable.', 3:'GPS timed out.' };
+    setStatus('Error: ' + (msgs[err.code] || err.message), 'err');
+  }
+
+  const GEO_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 };
+
+  function getOnce() {
+    stopWatch(true);
+    setStatus('Requesting position…', 'wait');
+    navigator.geolocation.getCurrentPosition(update, onError, GEO_OPTS);
+  }
+
+  function startWatch() {
+    stopWatch(true);
+    document.getElementById('btnRow').classList.add('watching');
+    setStatus('Watching for GPS fix…', 'wait');
+    watchId = navigator.geolocation.watchPosition(update, onError, GEO_OPTS);
+  }
+
+  function stopWatch(silent) {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    document.getElementById('btnRow').classList.remove('watching');
+    if (!silent) setStatus('Stopped.', '');
+  }
+
+  function toggleDetails() {
+    const btn  = document.getElementById('detailsToggle');
+    const body = document.getElementById('detailsBody');
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!open));
+    body.classList.toggle('open', !open);
+  }
+
+  if (!navigator.geolocation) {
+    setStatus('Geolocation not supported.', 'err');
+    document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+  }
+</script>
+</body>
+</html>
