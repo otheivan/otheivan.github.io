@@ -2,211 +2,372 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPS Data Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>GPS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+
   <style>
+    :root {
+      --bg:        #0e1117;
+      --surface:   #181d27;
+      --border:    #2a3142;
+      --accent:    #e8c84a;
+      --accent2:   #5bc8af;
+      --text:      #eef0f4;
+      --muted:     #6b7590;
+      --na:        #3a3f52;
+      --mono:      'Syne Mono', monospace;
+      --sans:      'Barlow', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: monospace;
-      padding: 20px;
-      max-width: 700px;
-      margin: 0 auto;
-      background: #fff;
-      color: #111;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 0 env(safe-area-inset-bottom);
     }
-    h1 { font-size: 1.4rem; margin-bottom: 4px; }
-    p.subtitle { color: #555; margin: 0 0 16px; font-size: 0.9rem; }
 
-    #status {
-      padding: 8px 12px;
-      border-radius: 4px;
-      margin-bottom: 16px;
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-family: var(--mono);
       font-size: 0.85rem;
-      background: #f0f0f0;
-      border-left: 4px solid #aaa;
-    }
-    #status.ok   { background: #e8f5e9; border-color: #4caf50; }
-    #status.err  { background: #fdecea; border-color: #e53935; }
-    #status.wait { background: #fff8e1; border-color: #ffc107; }
-
-    button {
-      padding: 8px 18px;
-      font-size: 0.95rem;
-      font-family: monospace;
-      cursor: pointer;
-      margin-right: 8px;
-      margin-bottom: 16px;
-      border: 1px solid #555;
-      border-radius: 3px;
-      background: #111;
-      color: #fff;
-    }
-    button:hover { background: #333; }
-    button#stopBtn { background: #fff; color: #111; }
-    button#stopBtn:hover { background: #eee; }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-    th, td {
-      text-align: left;
-      padding: 7px 10px;
-      border-bottom: 1px solid #e0e0e0;
-    }
-    th { color: #555; font-weight: normal; width: 45%; }
-    td { font-weight: bold; }
-    td.na { color: #aaa; font-weight: normal; font-style: italic; }
-
-    .section-header {
-      background: #f5f5f5;
-      padding: 5px 10px;
-      font-size: 0.75rem;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #777;
-      border-bottom: 1px solid #e0e0e0;
+      color: var(--accent);
+    }
+    #statusDot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--na);
+      transition: background 0.4s;
+    }
+    #statusDot.ok   { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+    #statusDot.err  { background: #e05a5a; box-shadow: 0 0 8px #e05a5a; }
+    #statusDot.wait { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    .primary-card {
+      margin: 20px 16px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 20px 20px;
     }
 
-    #lastUpdated {
-      margin-top: 12px;
+    .top-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-bottom: 24px;
+    }
+    .top-row .stat { text-align: center; }
+    .top-row .stat:first-child { border-right: 1px solid var(--border); padding-right: 16px; }
+    .top-row .stat:last-child  { padding-left: 16px; }
+
+    .stat-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 2.6rem;
+      line-height: 1;
+      color: var(--text);
+    }
+    .stat-value.direction { font-size: 2.8rem; color: var(--accent); }
+    .stat-value.na { color: var(--na); }
+    .stat-unit {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .coord-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .coord-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .coord-box .stat-label { margin-bottom: 4px; }
+    .coord-box .coord-val {
+      font-family: var(--mono);
+      font-size: 1.05rem;
+      color: var(--accent2);
+    }
+    .coord-box .coord-val.na { color: var(--na); }
+
+    .details-wrap { margin: 12px 16px 0; }
+    .details-toggle {
+      width: 100%;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-family: var(--sans);
       font-size: 0.8rem;
-      color: #888;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 16px 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.2s, color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .details-toggle:active { border-color: var(--accent); color: var(--text); }
+    .chevron { display: inline-block; transition: transform 0.3s ease; }
+    .details-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+
+    .details-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease; }
+    .details-body.open { max-height: 700px; }
+
+    .details-inner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      overflow: hidden;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-key {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .detail-val {
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      color: var(--text);
+      text-align: right;
+    }
+    .detail-val.na { color: var(--na); font-style: italic; font-family: var(--sans); font-size: 0.8rem; }
+    .detail-section {
+      background: var(--bg);
+      padding: 5px 16px;
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--na);
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 14px 16px 0;
+    }
+    .btn {
+      height: 60px;
+      border-radius: 14px;
+      border: none;
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active { opacity: 0.7; transform: scale(0.97); }
+    .btn-once  { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-watch { background: var(--accent); color: #111; }
+    .btn-stop  { background: #2a1a1a; color: #e05a5a; border: 1px solid #3d2020; display: none; }
+
+    .btn-row.watching .btn-once  { display: none; }
+    .btn-row.watching .btn-watch { display: none; }
+    .btn-row.watching .btn-stop  { display: block; grid-column: 1 / -1; }
+
+    #statusText {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 14px 16px 24px;
     }
   </style>
 </head>
 <body>
 
-<h1>GPS Data Viewer</h1>
-<p class="subtitle">Raw GPS output from this device</p>
+<header>
+  <h1>GPS Viewer</h1>
+  <div id="statusDot"></div>
+</header>
 
-<div id="status" class="wait">Waiting — press a button to start.</div>
-
-<div>
-  <button id="onceBtn" onclick="getOnce()">Get Once</button>
-  <button id="watchBtn" onclick="startWatch()">Watch (live)</button>
-  <button id="stopBtn" onclick="stopWatch()" style="display:none">Stop</button>
+<div class="primary-card">
+  <div class="top-row">
+    <div class="stat">
+      <div class="stat-label">Altitude</div>
+      <div class="stat-value na" id="alt">—</div>
+      <div class="stat-unit">metres</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Direction</div>
+      <div class="stat-value direction na" id="headingDir">—</div>
+      <div class="stat-unit" id="headingDeg">—°</div>
+    </div>
+  </div>
+  <div class="coord-row">
+    <div class="coord-box">
+      <div class="stat-label">Latitude</div>
+      <div class="coord-val na" id="lat">—</div>
+    </div>
+    <div class="coord-box">
+      <div class="stat-label">Longitude</div>
+      <div class="coord-val na" id="lon">—</div>
+    </div>
+  </div>
 </div>
 
-<table id="gpsTable">
-  <tbody>
-    <tr><td colspan="2" class="section-header">Position</td></tr>
-    <tr><th>Latitude</th><td id="lat" class="na">—</td></tr>
-    <tr><th>Longitude</th><td id="lon" class="na">—</td></tr>
-    <tr><th>Altitude (m)</th><td id="alt" class="na">—</td></tr>
-    <tr><th>Altitude (ft)</th><td id="altFt" class="na">—</td></tr>
+<div class="details-wrap">
+  <button class="details-toggle" id="detailsToggle" aria-expanded="false" onclick="toggleDetails()">
+    More details <span class="chevron">▾</span>
+  </button>
+  <div class="details-body" id="detailsBody">
+    <div class="details-inner">
+      <div class="detail-section">Accuracy</div>
+      <div class="detail-row"><span class="detail-key">Horiz. accuracy</span><span class="detail-val na" id="accH">—</span></div>
+      <div class="detail-row"><span class="detail-key">Vert. accuracy</span><span class="detail-val na" id="accV">—</span></div>
+      <div class="detail-section">Altitude</div>
+      <div class="detail-row"><span class="detail-key">Altitude (ft)</span><span class="detail-val na" id="altFt">—</span></div>
+      <div class="detail-section">Speed</div>
+      <div class="detail-row"><span class="detail-key">Speed m/s</span><span class="detail-val na" id="speed">—</span></div>
+      <div class="detail-row"><span class="detail-key">Speed km/h</span><span class="detail-val na" id="speedKmh">—</span></div>
+      <div class="detail-row"><span class="detail-key">Speed knots</span><span class="detail-val na" id="speedKn">—</span></div>
+      <div class="detail-section">Timestamp</div>
+      <div class="detail-row"><span class="detail-key">GPS time UTC</span><span class="detail-val na" id="ts">—</span></div>
+      <div class="detail-row"><span class="detail-key">Local time</span><span class="detail-val na" id="tsLocal">—</span></div>
+      <div class="detail-row"><span class="detail-key">Unix ms</span><span class="detail-val na" id="tsRaw">—</span></div>
+    </div>
+  </div>
+</div>
 
-    <tr><td colspan="2" class="section-header">Accuracy</td></tr>
-    <tr><th>Horizontal accuracy (m)</th><td id="accH" class="na">—</td></tr>
-    <tr><th>Vertical accuracy (m)</th><td id="accV" class="na">—</td></tr>
+<div class="btn-row" id="btnRow">
+  <button class="btn btn-once" onclick="getOnce()">Get Once</button>
+  <button class="btn btn-watch" onclick="startWatch()">▶ Watch Live</button>
+  <button class="btn btn-stop" onclick="stopWatch()">■ Stop</button>
+</div>
 
-    <tr><td colspan="2" class="section-header">Movement</td></tr>
-    <tr><th>Speed (m/s)</th><td id="speed" class="na">—</td></tr>
-    <tr><th>Speed (km/h)</th><td id="speedKmh" class="na">—</td></tr>
-    <tr><th>Speed (knots)</th><td id="speedKn" class="na">—</td></tr>
-    <tr><th>Heading (°)</th><td id="heading" class="na">—</td></tr>
-    <tr><th>Heading (direction)</th><td id="headingDir" class="na">—</td></tr>
-
-    <tr><td colspan="2" class="section-header">Timestamp</td></tr>
-    <tr><th>GPS timestamp (UTC)</th><td id="ts" class="na">—</td></tr>
-    <tr><th>GPS timestamp (local)</th><td id="tsLocal" class="na">—</td></tr>
-    <tr><th>Unix timestamp (ms)</th><td id="tsRaw" class="na">—</td></tr>
-  </tbody>
-</table>
-
-<div id="lastUpdated"></div>
+<div id="statusText">Press a button to start.</div>
 
 <script>
   let watchId = null;
+  const compass16 = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 
-  const fields = {
-    lat:      pos => pos.coords.latitude.toFixed(7),
-    lon:      pos => pos.coords.longitude.toFixed(7),
-    alt:      pos => pos.coords.altitude != null ? pos.coords.altitude.toFixed(1) : null,
-    altFt:    pos => pos.coords.altitude != null ? (pos.coords.altitude * 3.28084).toFixed(1) : null,
-    accH:     pos => pos.coords.accuracy != null ? pos.coords.accuracy.toFixed(1) : null,
-    accV:     pos => pos.coords.altitudeAccuracy != null ? pos.coords.altitudeAccuracy.toFixed(1) : null,
-    speed:    pos => pos.coords.speed != null ? pos.coords.speed.toFixed(2) : null,
-    speedKmh: pos => pos.coords.speed != null ? (pos.coords.speed * 3.6).toFixed(2) : null,
-    speedKn:  pos => pos.coords.speed != null ? (pos.coords.speed * 1.94384).toFixed(2) : null,
-    heading:  pos => pos.coords.heading != null ? pos.coords.heading.toFixed(1) + '°' : null,
-    headingDir: pos => {
-      if (pos.coords.heading == null) return null;
-      const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-      return dirs[Math.round(pos.coords.heading / 22.5) % 16];
-    },
-    ts:       pos => new Date(pos.timestamp).toUTCString(),
-    tsLocal:  pos => new Date(pos.timestamp).toLocaleString(),
-    tsRaw:    pos => pos.timestamp,
-  };
+  function setVal(id, value, cls) {
+    const el = document.getElementById(id);
+    if (value != null) {
+      el.textContent = value;
+      el.classList.remove('na');
+      if (cls) el.className = el.className.replace(/\bna\b/, '') + ' ' + cls;
+    } else {
+      el.textContent = '—';
+      el.classList.add('na');
+    }
+  }
 
-  function setStatus(msg, cls) {
-    const el = document.getElementById('status');
-    el.textContent = msg;
-    el.className = cls;
+  function setStatus(msg, dotClass) {
+    document.getElementById('statusText').textContent = msg;
+    document.getElementById('statusDot').className = dotClass || '';
   }
 
   function update(pos) {
-    for (const [id, fn] of Object.entries(fields)) {
-      const el = document.getElementById(id);
-      const val = fn(pos);
-      if (val != null) {
-        el.textContent = val;
-        el.className = '';
-      } else {
-        el.textContent = 'Not available';
-        el.className = 'na';
-      }
+    const c = pos.coords;
+    setVal('lat', c.latitude.toFixed(6));
+    setVal('lon', c.longitude.toFixed(6));
+    setVal('alt', c.altitude != null ? c.altitude.toFixed(1) : null);
+
+    if (c.heading != null) {
+      setVal('headingDir', compass16[Math.round(c.heading / 22.5) % 16]);
+      document.getElementById('headingDeg').textContent = c.heading.toFixed(1) + '°';
+    } else {
+      setVal('headingDir', null);
+      document.getElementById('headingDeg').textContent = '—°';
     }
-    document.getElementById('lastUpdated').textContent =
-      'Last updated: ' + new Date().toLocaleTimeString();
-    setStatus('Data received.', 'ok');
+
+    setVal('accH',     c.accuracy != null          ? c.accuracy.toFixed(1) + ' m'           : null);
+    setVal('accV',     c.altitudeAccuracy != null   ? c.altitudeAccuracy.toFixed(1) + ' m'   : null);
+    setVal('altFt',    c.altitude != null           ? (c.altitude * 3.28084).toFixed(1) + ' ft' : null);
+    setVal('speed',    c.speed != null              ? c.speed.toFixed(2) + ' m/s'            : null);
+    setVal('speedKmh', c.speed != null              ? (c.speed * 3.6).toFixed(2) + ' km/h'   : null);
+    setVal('speedKn',  c.speed != null              ? (c.speed * 1.94384).toFixed(2) + ' kn' : null);
+    setVal('ts',       new Date(pos.timestamp).toUTCString());
+    setVal('tsLocal',  new Date(pos.timestamp).toLocaleTimeString());
+    setVal('tsRaw',    pos.timestamp);
+
+    setStatus('Updated ' + new Date().toLocaleTimeString(), 'ok');
   }
 
   function onError(err) {
-    const msgs = {
-      1: 'Permission denied — please allow location access.',
-      2: 'Position unavailable — could not determine location.',
-      3: 'Timeout — GPS took too long to respond.',
-    };
+    const msgs = { 1:'Permission denied.', 2:'Position unavailable.', 3:'GPS timed out.' };
     setStatus('Error: ' + (msgs[err.code] || err.message), 'err');
   }
 
-  const GEO_OPTS = {
-    enableHighAccuracy: true,
-    maximumAge: 0,
-    timeout: 15000,
-  };
+  const GEO_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 };
 
   function getOnce() {
-    stopWatch();
-    document.getElementById('stopBtn').style.display = 'none';
+    stopWatch(true);
     setStatus('Requesting position…', 'wait');
     navigator.geolocation.getCurrentPosition(update, onError, GEO_OPTS);
   }
 
   function startWatch() {
-    stopWatch();
-    document.getElementById('stopBtn').style.display = '';
-    setStatus('Watching — waiting for first fix…', 'wait');
+    stopWatch(true);
+    document.getElementById('btnRow').classList.add('watching');
+    setStatus('Watching for GPS fix…', 'wait');
     watchId = navigator.geolocation.watchPosition(update, onError, GEO_OPTS);
   }
 
-  function stopWatch() {
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      setStatus('Watch stopped.', '');
-      document.getElementById('stopBtn').style.display = 'none';
-    }
+  function stopWatch(silent) {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    document.getElementById('btnRow').classList.remove('watching');
+    if (!silent) setStatus('Stopped.', '');
+  }
+
+  function toggleDetails() {
+    const btn  = document.getElementById('detailsToggle');
+    const body = document.getElementById('detailsBody');
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!open));
+    body.classList.toggle('open', !open);
   }
 
   if (!navigator.geolocation) {
-    setStatus('Geolocation is not supported by this browser.', 'err');
-    document.getElementById('onceBtn').disabled = true;
-    document.getElementById('watchBtn').disabled = true;
+    setStatus('Geolocation not supported.', 'err');
+    document.querySelectorAll('.btn').forEach(b => b.disabled = true);
   }
 </script>
-
 </body>
 </html>
